@@ -1,0 +1,51 @@
+name: Scrape Euroleague Boxscores
+
+on:
+  # Run manually from the Actions tab
+  workflow_dispatch: {}
+  # Optional: also run automatically on a schedule (uncomment to enable).
+  # Runs at 06:00 UTC every day; adjust as you like.
+  # schedule:
+  #   - cron: "0 6 * * *"
+
+permissions:
+  contents: write   # needed so the workflow can commit the DB back to the repo
+
+jobs:
+  scrape:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      - name: Check out repo
+        uses: actions/checkout@v4
+        with:
+          # Fetch the DB file that already exists in the repo (if any) so the
+          # script can resume instead of re-scraping everything.
+          fetch-depth: 1
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run scraper
+        run: python scrape_euroleague.py
+
+      - name: Upload DB as workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: euroleague-db
+          path: data/euroleague2026draft.db
+          if-no-files-found: error
+
+      - name: Commit updated DB back to repo
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add data/euroleague2026draft.db
+          git diff --staged --quiet && echo "No changes to commit" || git commit -m "Update Euroleague boxscore data [skip ci]"
+          git push
